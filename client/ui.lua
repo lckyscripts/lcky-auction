@@ -41,14 +41,14 @@ function BuildAuctionText()
     
     local actionHint = ''
     if not HasPlayerJoined() then
-        actionHint = '\n\n**Join Auction: [X] **'
+        actionHint = '  \n**Join Auction: [X] **'
     else
         local minBid = data.currentBid + data.minIncrement
-        actionHint = '\n\n**[X] Bid ($' .. FormatMoney(minBid) .. '+)**'
+        actionHint = '  \n**[X] Bid ($' .. FormatMoney(minBid) .. '+)**'
     end
     
     return string.format(
-        '**%s**  \n%s \n\n💰 **Current Bid:** $%s  \n👤 **Highest:** %s  \n⏱️ **Remain:** %s%s%s',
+        '**%s**  \n%s  \n💰 **Current Bid:** $%s  \n👤 **Highest:** %s  \n⏱️ **Remain:** %s%s%s',
         data.title,
         data.description ~= '' and data.description or '',
         FormatMoney(data.currentBid),
