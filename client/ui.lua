@@ -26,7 +26,7 @@ function BuildAuctionText()
     local data = GetLocalAuctionData()
     if not data then return '' end
     
-    local timeRemaining = math.max(0, data.endTime - os.time())
+    local timeRemaining = math.max(0, data.endTime - GetCloudTimeAsInt())
     local highestBidder = 'There\'s no bid yet'
     if data.highestBidder and data.highestBidder.name then
         highestBidder = data.highestBidder.name
@@ -48,7 +48,7 @@ function BuildAuctionText()
     end
     
     return string.format(
-        '**%s**\n%s\n\n💰 **Current Bid:** $%s\n👤 **Highest:** %s\n⏱️ **Remain:** %s%s%s',
+        '**%s**  \n%s \n\n💰 **Current Bid:** $%s  \n👤 **Highest:** %s  \n⏱️ **Remain:** %s%s%s',
         data.title,
         data.description ~= '' and data.description or '',
         FormatMoney(data.currentBid),
