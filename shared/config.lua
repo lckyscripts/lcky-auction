@@ -78,7 +78,7 @@ Config.UI = {
     textUIPosition = 'right-center',
     
     -- Notification position
-    notifyPosition = 'top-right',
+    notifyPosition = 'top',
     
     -- TextUI refresh interval (ms) - for time display updates
     -- Lower = more accurate but more updates
