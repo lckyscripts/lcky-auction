@@ -62,8 +62,8 @@ lcky-auction/
 | Key | Action |
 |-----|--------|
 | F5 | Going Once |
-| F6 | Going Twice |
-| F7 | SOLD |
+| F5 | Going Twice |
+| F5 | SOLD |
 
 ---
 
