@@ -47,7 +47,7 @@ function CreateAuctionZone(coords, radius)
     function auctionPoint:nearby()
         local data = GetLocalAuctionData()
         if data then
-            local timeRemaining = math.max(0, data.endTime - os.time())
+            local timeRemaining = math.max(0, data.endTime - GetCloudTimeAsInt())
             local timeDisplay = FormatTime(timeRemaining)
             
             if timeDisplay ~= lastTimeDisplay then
