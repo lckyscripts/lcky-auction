@@ -1,184 +1,177 @@
--- lcky-auction Server - Auction State Management
--- RAM-based auction logic
+-- lcky-auction Server - Main Event Handlers
 
 -- ============================================================================
--- STATE VARIABLES
+-- COMMANDS
 -- ============================================================================
 
-local AuctionData = nil
-local PlayersInZone = {}
-local Participants = {}
-
--- ============================================================================
--- AUCTION FUNCTIONS
--- ============================================================================
-
-function CreateAuction(hostServerId, data)
-    if AuctionData and AuctionData.isActive then
-        return false, Config.Locale.auctionExists
+RegisterCommand('auction', function(source)
+    if source == 0 then return end
+    
+    if HasActiveAuction() then
+        TriggerClientEvent('ox_lib:notify', source, {
+            type = 'error',
+            description = Config.Locale.auctionExists
+        })
+        return
     end
     
-    -- Get host coordinates
-    local player = GetPlayerFromServerId(hostServerId)
-    if not player then return false, 'Player not found' end
+    TriggerClientEvent('lcky-auction:client:openInputDialog', source)
+end, false)
+
+-- ============================================================================
+-- AUCTION CREATION
+-- ============================================================================
+
+RegisterNetEvent('lcky-auction:server:createAuction', function(data)
+    local source = source
     
-    local ped = GetPlayerPed(player)
-    if not ped then return false, 'Ped not found' end
+    if HasActiveAuction() then
+        TriggerClientEvent('ox_lib:notify', source, {
+            type = 'error',
+            description = Config.Locale.auctionExists
+        })
+        return
+    end
     
-    local coords = GetEntityCoords(ped)
-    
-    AuctionData = {
-        id = GenerateAuctionId(),
+    local auctionData = {
         title = data.title,
         description = data.description or '',
-        startingPrice = data.startingPrice,
-        minIncrement = data.minIncrement,
-        hostServerId = hostServerId,
-        hostName = GetPlayerName(player),
-        isActive = true,
-        stage = 0,
-        currentBid = data.startingPrice,
-        highestBidder = nil,
-        duration = data.duration,
-        startTime = os.time(),
-        endTime = os.time() + data.duration,
-        coords = vector3(coords.x, coords.y, coords.z),
-        radius = Config.Zone.radius,
-        participants = {}
+        startingPrice = tonumber(data.startingPrice) or Config.Defaults.defaultStartingPrice,
+        minIncrement = tonumber(data.minIncrement) or Config.Defaults.defaultMinIncrement,
+        duration = tonumber(data.duration) or Config.Defaults.defaultDuration
     }
     
-    -- Host automatically joins
-    Participants[hostServerId] = true
-    AuctionData.participants[hostServerId] = {
-        name = AuctionData.hostName
-    }
+    local success, result = CreateAuction(source, auctionData)
     
-    PlayersInZone = {}
-    
-    return true, AuctionData
-end
-
-function JoinAuction(serverId)
-    if not AuctionData or not AuctionData.isActive then
-        return false, Config.Locale.noActiveAuction
-    end
-    
-    if Participants[serverId] then
-        return false, Config.Locale.alreadyJoined
-    end
-    
-    local player = GetPlayerFromServerId(serverId)
-    Participants[serverId] = true
-    AuctionData.participants[serverId] = {
-        name = GetPlayerName(player)
-    }
-    
-    return true, Config.Locale.joinedAuction
-end
-
-function PlaceBid(serverId, amount)
-    if not AuctionData or not AuctionData.isActive then
-        return false, Config.Locale.noActiveAuction
-    end
-    
-    if not Participants[serverId] then
-        return false, Config.Locale.notParticipant
-    end
-    
-    if AuctionData.stage > 0 then
-        return false, Config.Locale.auctionEnding
-    end
-    
-    local minBid = AuctionData.currentBid + AuctionData.minIncrement
-    if amount < minBid then
-        return false, string.format(Config.Locale.minBidRequired, FormatMoney(minBid))
-    end
-    
-    local player = GetPlayerFromServerId(serverId)
-    AuctionData.currentBid = amount
-    AuctionData.highestBidder = {
-        serverId = serverId,
-        name = GetPlayerName(player)
-    }
-    
-    return true, Config.Locale.bidPlaced
-end
-
-function AdvanceStage(serverId)
-    if not AuctionData or not AuctionData.isActive then
-        return false, Config.Locale.noActiveAuction
-    end
-    
-    if AuctionData.hostServerId ~= serverId then
-        return false, Config.Locale.hostOnly
-    end
-    
-    AuctionData.stage = AuctionData.stage + 1
-    
-    if AuctionData.stage >= 3 then
-        local winner = AuctionData.highestBidder
-        local amount = AuctionData.currentBid
-        local title = AuctionData.title
+    if success then
+        TriggerClientEvent('ox_lib:notify', source, {
+            type = 'success',
+            description = Config.Locale.auctionCreated
+        })
         
-        AuctionData = nil
-        Participants = {}
-        PlayersInZone = {}
-        
-        return true, { winner = winner, amount = amount, title = title }
+        TriggerClientEvent('lcky-auction:client:createZone', -1, result)
+        TriggerClientEvent('lcky-auction:client:enableHostControls', source, result)
+    else
+        TriggerClientEvent('ox_lib:notify', source, {
+            type = 'error',
+            description = result
+        })
     end
-    
-    local stageMessages = { [1] = Config.Locale.stageOne, [2] = Config.Locale.stageTwo }
-    return true, { stage = AuctionData.stage, message = stageMessages[AuctionData.stage] }
-end
+end)
 
-function EndAuction()
-    local winner = AuctionData and AuctionData.highestBidder
-    local amount = AuctionData and AuctionData.currentBid
-    local title = AuctionData and AuctionData.title
+-- ============================================================================
+-- PARTICIPATION
+-- ============================================================================
+
+RegisterNetEvent('lcky-auction:server:joinAuction', function()
+    local source = source
+    local success, message = JoinAuction(source)
     
-    AuctionData = nil
-    Participants = {}
-    PlayersInZone = {}
+    if success then
+        TriggerClientEvent('ox_lib:notify', source, {
+            type = 'success',
+            description = message
+        })
+        TriggerClientEvent('lcky-auction:client:joinedSuccess', source)
+        BroadcastToZone('lcky-auction:client:updateAuction', GetAuctionData())
+    else
+        TriggerClientEvent('ox_lib:notify', source, {
+            type = 'error',
+            description = message
+        })
+    end
+end)
+
+-- ============================================================================
+-- BIDDING
+-- ============================================================================
+
+RegisterNetEvent('lcky-auction:server:placeBid', function(amount)
+    local source = source
+    local bidAmount = tonumber(amount)
     
-    return { winner = winner, amount = amount, title = title }
+    local success, message = PlaceBid(source, bidAmount)
+    
+    if success then
+        TriggerClientEvent('lcky-auction:client:playBidAnimation', source)
+        
+        local auctionData = GetAuctionData()
+        BroadcastToZone('lcky-auction:client:updateAuction', auctionData)
+        
+        local player = source
+        BroadcastToZone('lcky-auction:client:notifyNewBid', {
+            bidder = GetPlayerName(player),
+            amount = bidAmount
+        })
+    else
+        TriggerClientEvent('ox_lib:notify', source, {
+            type = 'error',
+            description = message
+        })
+    end
+end)
+
+-- ============================================================================
+-- HOST CONTROLS
+-- ============================================================================
+
+RegisterNetEvent('lcky-auction:server:advanceStage', function()
+    local source = source
+    local success, result = AdvanceStage(source)
+    
+    if success then
+        if result.sold then
+            BroadcastToZone('lcky-auction:client:auctionSold', result)
+            TriggerClientEvent('lcky-auction:client:removeZone', -1)
+        else
+            BroadcastToZone('lcky-auction:client:stageUpdate', result)
+        end
+    else
+        TriggerClientEvent('ox_lib:notify', source, {
+            type = 'error',
+            description = result
+        })
+    end
+end)
+
+-- ============================================================================
+-- ZONE TRACKING
+-- ============================================================================
+
+RegisterNetEvent('lcky-auction:server:enterZone', function()
+    AddPlayerToZone(source)
+    if HasActiveAuction() then
+        TriggerClientEvent('lcky-auction:client:updateAuction', source, GetAuctionData())
+    end
+end)
+
+RegisterNetEvent('lcky-auction:server:exitZone', function()
+    RemovePlayerFromZone(source)
+end)
+
+-- ============================================================================
+-- BROADCAST HELPER
+-- ============================================================================
+
+function BroadcastToZone(eventName, data)
+    for serverId, _ in pairs(GetPlayersInZone()) do
+        TriggerClientEvent(eventName, serverId, data)
+    end
 end
 
 -- ============================================================================
--- ZONE FUNCTIONS
+-- PLAYER DISCONNECT
 -- ============================================================================
 
-function AddPlayerToZone(serverId)
-    PlayersInZone[serverId] = true
-end
-
-function RemovePlayerFromZone(serverId)
-    PlayersInZone[serverId] = nil
-end
-
-function GetPlayersInZone()
-    return PlayersInZone
-end
-
-function GetAuctionData()
-    if not AuctionData then return nil end
+AddEventHandler('playerDropped', function()
+    local source = source
+    RemovePlayerFromZone(source)
     
-    local data = {}
-    for k, v in pairs(AuctionData) do
-        data[k] = v
+    if HasActiveAuction() and GetAuctionHost() == source then
+        BroadcastToZone('lcky-auction:client:hostDisconnected', {
+            title = GetAuctionData().title
+        })
+        TriggerClientEvent('lcky-auction:client:removeZone', -1)
+        EndAuction()
     end
-    data.timeRemaining = math.max(0, AuctionData.endTime - os.time())
-    
-    return data
-end
-
-function HasActiveAuction()
-    return AuctionData and AuctionData.isActive
-end
-
-function GetAuctionHost()
-    return AuctionData and AuctionData.hostServerId
-end
-
-function IsParticipant(serverId)
-    return Participants[serverId] == true
-end
+end)
