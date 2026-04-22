@@ -98,7 +98,7 @@ RegisterNetEvent('lcky-auction:server:placeBid', function(amount)
         local auctionData = GetAuctionData()
         BroadcastToZone('lcky-auction:client:updateAuction', auctionData)
         
-        local player = GetPlayerFromServerId(source)
+        local player = source
         BroadcastToZone('lcky-auction:client:notifyNewBid', {
             bidder = GetPlayerName(player),
             amount = bidAmount
@@ -120,7 +120,7 @@ RegisterNetEvent('lcky-auction:server:advanceStage', function()
     local success, result = AdvanceStage(source)
     
     if success then
-        if result.winner then
+        if result.sold then
             BroadcastToZone('lcky-auction:client:auctionSold', result)
             TriggerClientEvent('lcky-auction:client:removeZone', -1)
         else
